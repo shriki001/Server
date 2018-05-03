@@ -60,7 +60,7 @@ void Server::handlePackets()
 		}
 		if (m_clients.size() == 0)
 			break;
-		for (int i = 0; i < m_clients.size(); ++i)
+		for (size_t i = 0; i < m_clients.size(); ++i)
 		{
 			sf::Socket::Status status = m_clients.at(i).first->receive(packet);
 
@@ -92,7 +92,7 @@ void Server::handlePackets()
 				m_clients.erase(m_clients.begin() + i);
 				break;
 			default:
-				++i;
+				++i; 
 			}
 		}
 	}
