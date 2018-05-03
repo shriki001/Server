@@ -1,6 +1,5 @@
 
 #include <iostream>
-#include "ChatBox.h"
 #include "Client.h"
 #include "PacketType.h"
 #include <fstream>
