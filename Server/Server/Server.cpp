@@ -15,11 +15,7 @@
 Server::Server(int port)
 {
 	m_listner.listen(port);
-	m_selector.add(m_listner);
-	canPlays.resize(2);
-	hits.resize(2);
-	coordHits.resize(2);
-	turns.resize(2);
+	resetAll();
 }
 
 /*
@@ -29,6 +25,7 @@ Server::Server(int port)
 
 void Server::run()
 {
+	static sf::Time elapsed = sf::Time::Zero;
 	while (true)
 	{
 		//Handle new coming clients
@@ -39,14 +36,26 @@ void Server::run()
 				std::shared_ptr<sf::TcpSocket> Client = std::make_shared<sf::TcpSocket>();
 				if (m_listner.accept(*Client) == sf::Socket::Done)
 				{
+					ServerClock.restart();
 					m_clients.emplace_back(std::move(std::make_pair(Client, "")));
 					m_selector.add(*Client);
 				}
 				turns.at(0) = true;
 			}
+			///std::cout << ServerClock.getElapsedTime().asSeconds() << "\n";
+
+			if (m_clients.size() == 1 && ServerClock.getElapsedTime() > TIME_OUT_TIME)
+			{
+				std::string msg = "Match not found...disconnects";
+				broadCast(SERVER_MSG, msg, 0);
+				sf::sleep(sf::milliseconds(500));
+				resetAll();
+			}
 			if (m_clients.size() == ACCEPT_CLIENTS)
 			{
 				handlePackets();
+				resetAll();
+				clearMap();
 			}
 		}
 	}
@@ -57,27 +66,20 @@ void Server::run()
 
 void Server::handlePackets()
 {
+	int count = 0;
 	sf::Socket::Status status;
 	std::string msg;
 	PacketType MsgType;
 	sf::Packet packet;
-	sf::Vector2i vec;
+	sf::Vector2i vec{ -1,-1 };
 	std::string sign;
-	char tmp[1];
+	char tmp[ACCEPT_CLIENTS];
 	bool canPlay;
 	bool hit;
 	int score;
-	tmp[0] = '\0';
-	while (true)
+
+	while (m_clients.size() == 2)
 	{
-		if (m_clients.size() == 1)
-		{
-			std::cout << m_clients.at(0).second + " has been disconnected\n";
-			sf::sleep(sf::seconds(1));
-			m_clients.clear();
-		}
-		if (m_clients.size() == 0)
-			break;
 		for (size_t i = 0; i < m_clients.size(); ++i)
 		{
 			if (m_selector.wait())
@@ -106,7 +108,12 @@ void Server::handlePackets()
 						else if (MsgType == COORDINATE)
 						{
 							packet >> vec.x >> vec.y;
-							broadCast(COORDINATE, vec, !i);
+							coordHits.at(i) = vec;
+						}
+						else if (MsgType == GET_COORD)
+						{
+							broadCast(GET_COORD, coordHits.at(!i), i);
+							coordHits.at(!i) = { -1,-1 };
 						}
 						else if (MsgType == CAN_PLAY)
 						{
@@ -142,9 +149,12 @@ void Server::handlePackets()
 						}
 						break;
 					case sf::Socket::Disconnected:
-						std::cout << m_clients.at(i).second + " has been disconnected\n";
+						std::cout << m_clients.at(0).second + " has been disconnected\n";
+						std::cout << m_clients.at(1).second + " has been disconnected\n";
 						broadCast(SERVER_MSG, m_clients.at(i).second + " has been disconnected\n", !i);
-						m_clients.erase(m_clients.begin() + i);
+						broadCast(SERVER_MSG, m_clients.at(i).second + " has been disconnected\n", i);
+						sf::sleep(sf::milliseconds(700));
+						m_clients.clear();
 						break;
 					default:
 						++i;

@@ -17,6 +17,10 @@ const PacketType SCORE = 6;
 const PacketType TURN = 7;
 const PacketType CAN_PLAY = 8;
 const PacketType INITIAL_DATA = 9;
+const PacketType GET_COORD = 10;
+
 
 // limited client (only 2 clients can play in one game show)
 const int ACCEPT_CLIENTS = 2;
+
+const sf::Time TIME_OUT_TIME = sf::seconds(30);
