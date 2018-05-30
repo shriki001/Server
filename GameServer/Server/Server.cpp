@@ -1,8 +1,3 @@
-
-#ifdef _MSC_VER
-#define _CRT_SECURE_NO_WARNINGS
-#endif
-
 #include "Server.h"
 #include "PacketType.h"
 #include <iostream>
@@ -16,8 +11,86 @@ Server::Server(int port)
 {
 	m_listner.listen(port);
 	resetAll();
+	printTime();
+	std::cout << "Game Server Start\n";
 }
 
+
+void Server::resetAll()
+{
+	m_selector.clear();
+	m_clients.clear();
+	m_selector.add(m_listner);
+	canPlays.resize(ACCEPT_CLIENTS);
+	won.resize(ACCEPT_CLIENTS);
+	counting.resize(ACCEPT_CLIENTS);
+	hits.resize(ACCEPT_CLIENTS);
+	turns.resize(ACCEPT_CLIENTS);
+	coordHits.resize(ACCEPT_CLIENTS);
+	for (int i = 0; i < ACCEPT_CLIENTS; ++i)
+		coordHits.at(i) = { -1,-1 };
+}
+
+
+bool Server::getHit(const int player, const int i, const int j) const
+{
+	try
+	{
+		if (i == -1 || j == -1)
+			return false;
+		return map[player].at(i).at(j) != '-';
+	}
+	catch (std::exception) { return false; }
+}
+
+void Server::handlePrint()
+{
+	clock.restart();
+	printTime();
+	SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), 13);
+	std::cout << "Game Start\n";
+	printTime();
+	SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), 11);
+	std::cout << "Now Playing: " << m_clients.at(0).second << " V.S " << m_clients.at(1).second << "\n";
+	SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), 15);
+}
+
+
+void Server::handleDisconnect(int i)
+{
+	printTime();
+	SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), 11);
+	(won.at(i) == 1) ? std::cout << m_clients.at(i).second + "Has WON!!\n" :
+		std::cout << m_clients.at(!i).second + "Has WON!!\n";
+
+	printTime();
+	SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), 10);
+	std::cout << "Played Game Time: " << int(clock.getElapsedTime().asSeconds() / 60) << ":";
+	(int(fmod(clock.getElapsedTime().asSeconds(), 60)) < 10) ? std::cout << "0" :
+		std::cout << int(fmod(clock.getElapsedTime().asSeconds(), 60));
+	std::cout << " Minuets" << "\n";
+	printTime();
+	SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), 13);
+	std::cout << "Game End\n";
+	broadCast(SERVER_MSG, m_clients.at(i).second + " has been disconnected\n", !i);
+	broadCast(SERVER_MSG, m_clients.at(i).second + " has been disconnected\n", i);
+	sf::sleep(sf::milliseconds(700));
+	m_clients.clear();
+}
+
+
+void Server::printTime()
+{
+	std::string nowTime;
+	time(&rawtime);
+	timeinfo = localtime(&rawtime);
+	SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), 14);
+	nowTime = asctime(timeinfo);
+	nowTime = nowTime.substr(0, nowTime.length() - 1);
+	nowTime.append(": ");
+	std::cout << nowTime;
+	SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), 15);
+}
 /*
  *	this function in charge of received new client and if 2 clients are connected
  *	they can send and received messages
@@ -42,11 +115,9 @@ void Server::run()
 				}
 				turns.at(0) = true;
 			}
-			///std::cout << ServerClock.getElapsedTime().asSeconds() << "\n";
-
 			if (m_clients.size() == 1 && ServerClock.getElapsedTime() > TIME_OUT_TIME)
 			{
-				std::string msg = "Match not found...disconnects";
+				std::string msg = "Match not found!!\nTry again later\nDisconnect...";
 				broadCast(SERVER_MSG, msg, 0);
 				sf::sleep(sf::milliseconds(500));
 				resetAll();
@@ -59,6 +130,15 @@ void Server::run()
 			}
 		}
 	}
+}
+
+
+void Server::clearMap()
+{
+	for (int num = 0; num < ACCEPT_CLIENTS; ++num)
+		for (int i = 0; i < ROW; ++i)
+			for (int j = 0; j < COL; ++j)
+				map[num].at(j).at(i) = '-';
 }
 /*
 *	this function in charge of received and send messages between 2 clients
@@ -76,9 +156,8 @@ void Server::handlePackets()
 	char tmp[ACCEPT_CLIENTS];
 	bool canPlay;
 	bool hit;
-	int score;
 
-	while (m_clients.size() == 2)
+	while (m_clients.size() == ACCEPT_CLIENTS)
 	{
 		for (size_t i = 0; i < m_clients.size(); ++i)
 		{
@@ -96,8 +175,13 @@ void Server::handlePackets()
 						{
 							packet >> msg;
 							m_clients.at(i).second = msg;
-							std::cout << msg + " has joined\n";
 							broadCast(INITIAL_NAME_DATA, msg, !i);
+							count++;
+							if (count == ACCEPT_CLIENTS)
+							{
+								handlePrint();
+								count = 0;
+							}
 						}
 						if (MsgType == INITIAL_DATA)
 						{
@@ -136,25 +220,21 @@ void Server::handlePackets()
 							packet >> vec.x >> vec.y;
 							hit = getHit(!i, vec.x, vec.y);
 							broadCast(GET_HIT, hit, i);
+							if (hit)
+								counting.at(i)++;
 						}
-						else if (MsgType == GENERAL_MSG)
+						else if (MsgType == WHOWON)
 						{
-							packet >> msg;
-							broadCast(GENERAL_MSG, msg, !i);
-						}
-						else if (MsgType == SCORE)
-						{
-							packet >> score;
-							//broadCast(SCORE, score, !i);
+							if (counting.at(i) == WON)
+							{
+								won.at(i) == 1;
+								won.at(!i) == 2;
+							}
+							broadCast(WHOWON, won.at(i), i);
 						}
 						break;
 					case sf::Socket::Disconnected:
-						std::cout << m_clients.at(0).second + " has been disconnected\n";
-						std::cout << m_clients.at(1).second + " has been disconnected\n";
-						broadCast(SERVER_MSG, m_clients.at(i).second + " has been disconnected\n", !i);
-						broadCast(SERVER_MSG, m_clients.at(i).second + " has been disconnected\n", i);
-						sf::sleep(sf::milliseconds(700));
-						m_clients.clear();
+						handleDisconnect(i);
 						break;
 					default:
 						++i;
@@ -180,10 +260,10 @@ void Server::broadCast(PacketType MsgType, const std::string &msg, int index)
 *	this function in charge of send player score
 */
 
-void Server::broadCast(PacketType MsgType, const int score, int index)
+void Server::broadCast(PacketType MsgType, const int won, int index)
 {
 	sf::Packet pack;
-	pack << MsgType << score;
+	pack << MsgType << won;
 	m_clients.at(index).first->send(pack);
 }
 

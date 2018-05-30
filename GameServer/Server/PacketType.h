@@ -8,7 +8,7 @@
 
 using PacketType = sf::Uint8;
 const PacketType INITIAL_NAME_DATA = 0;
-const PacketType GENERAL_MSG = 1;
+const PacketType WHOWON = 1;
 const PacketType SERVER_MSG = 2;
 const PacketType COORDINATE = 3;
 const PacketType HIT = 4;
@@ -22,5 +22,8 @@ const PacketType GET_COORD = 10;
 
 // limited client (only 2 clients can play in one game show)
 const int ACCEPT_CLIENTS = 2;
+const int WON = 22;
+const int ROW = 10;
+const int COL = 10;
 
 const sf::Time TIME_OUT_TIME = sf::seconds(30);
