@@ -51,7 +51,7 @@ void GameServer::handlePrint(std::vector <std::pair<std::shared_ptr<sf::TcpSocke
 }
 
 
-void GameServer::handleDisconnect(std::vector <std::pair<std::shared_ptr<sf::TcpSocket>, std::string>> clients, std::array<short, 2> won)
+void GameServer::handleDisconnect(std::vector <std::pair<std::shared_ptr<sf::TcpSocket>, std::string>> clients, std::array<short, ACCEPT_CLIENTS> won)
 {
 	printTime();
 	SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), 11);
