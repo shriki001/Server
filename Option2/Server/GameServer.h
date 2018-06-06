@@ -16,7 +16,6 @@ public:
 	~GameServer() = default;
 
 	void resetAll();
-	//bool getHit(std::array<std::array<std::array<char, ROW>, COL>, ACCEPT_CLIENTS> map, const int player, const int i, const int j) const;
 	void handlePrint(const std::string&, const std::string&);
 	void handleDisconnect(const std::string&, const std::string&, const std::array<short, ACCEPT_CLIENTS>& won);
 	void printTime();
