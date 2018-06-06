@@ -40,7 +40,7 @@ void GameServer::handlePrint(const std::string& Player1, const std::string& Play
 }
 
 
-void GameServer::handleDisconnect(const std::string& Player1, const std::string& Player2, std::array<short, ACCEPT_CLIENTS> won)
+void GameServer::handleDisconnect(const std::string& Player1, const std::string& Player2, const std::array<short, ACCEPT_CLIENTS>& won)
 {
 	printTime();
 	SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), 11);
