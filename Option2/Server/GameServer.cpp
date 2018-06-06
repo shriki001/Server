@@ -27,18 +27,7 @@ void GameServer::resetAll()
 }
 
 
-bool GameServer::getHit(std::array<std::array<std::array<char, ROW>, COL>, ACCEPT_CLIENTS> map, const int player, const int i, const int j) const
-{
-	try
-	{
-		if (i == -1 || j == -1)
-			return false;
-		return map[player].at(i).at(j) != '-';
-	}
-	catch (std::exception) { return false; }
-}
-
-void GameServer::handlePrint(std::vector <std::pair<std::shared_ptr<sf::TcpSocket>, std::string>> clients)
+void GameServer::handlePrint(const std::string& Player1, const std::string& Player2)
 {
 	clock.restart();
 	printTime();
@@ -46,19 +35,19 @@ void GameServer::handlePrint(std::vector <std::pair<std::shared_ptr<sf::TcpSocke
 	std::cout << "Game Start\n";
 	printTime();
 	SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), 11);
-	std::cout << "Now Playing: " << clients.at(0).second << " V.S " << clients.at(1).second << "\n";
+	std::cout << "Now Playing: " << Player1 << " V.S " << Player2 << "\n";
 	SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), 15);
 }
 
 
-void GameServer::handleDisconnect(std::vector <std::pair<std::shared_ptr<sf::TcpSocket>, std::string>> clients, std::array<short, 2> won)
+void GameServer::handleDisconnect(const std::string& Player1, const std::string& Player2, std::array<short, ACCEPT_CLIENTS> won)
 {
 	printTime();
 	SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), 11);
 	if (won.at(0) == 1)
-		std::cout << clients.at(0).second + " Has WON!!\n";
+		std::cout << Player1 + " Has WON!!\n";
 	else if (won.at(1) == 1)
-		std::cout << clients.at(1).second + " Has WON!!\n";
+		std::cout << Player2 + " Has WON!!\n";
 	else std::cout << "NoBody has WON!!\n";
 
 	printTime();
@@ -112,7 +101,7 @@ void GameServer::run()
 			if (m_clients.size() == 1 && ServerClock.getElapsedTime() > TIME_OUT_TIME)
 			{
 				std::string msg = "Match not found!!\nTry again later\nDisconnect...";
-				broadCast(SERVER_MSG, msg, 0, m_clients);
+				broadCast(SERVER_MSG, msg, m_clients.at(0).first);
 				sf::sleep(sf::milliseconds(500));
 				resetAll();
 			}
@@ -189,11 +178,11 @@ void GameServer::handlePackets(std::vector <std::pair<std::shared_ptr<sf::TcpSoc
 						{
 							packet >> msg;
 							clients.at(i).second = msg;
-							broadCast(INITIAL_NAME_DATA, msg, !i, clients);
+							broadCast(INITIAL_NAME_DATA, msg, clients.at(!i).first);
 							count++;
 							if (count == ACCEPT_CLIENTS)
 							{
-								handlePrint(clients);
+								handlePrint(clients.at(0).second, clients.at(0).second);
 								count = 0;
 							}
 						}
@@ -211,17 +200,17 @@ void GameServer::handlePackets(std::vector <std::pair<std::shared_ptr<sf::TcpSoc
 						}
 						else if (MsgType == GET_COORD)
 						{
-							broadCast(GET_COORD, coordHits.at(!i), i, clients);
+							broadCast(GET_COORD, coordHits.at(!i), clients.at(i).first);
 							coordHits.at(!i) = { -1,-1 };
 						}
 						else if (MsgType == CAN_PLAY)
 						{
 							packet >> canPlay;
 							canPlays.at(i) = canPlay;
-							broadCast(CAN_PLAY, canPlays.at(i), !i, clients);
+							broadCast(CAN_PLAY, canPlays.at(i), clients.at(!i).first);
 						}
 						else if (MsgType == TURN)
-							broadCast(TURN, turns.at(i), i, clients);
+							broadCast(TURN, turns.at(i), clients.at(i).first);
 
 						else if (MsgType == HIT)
 						{
@@ -231,8 +220,10 @@ void GameServer::handlePackets(std::vector <std::pair<std::shared_ptr<sf::TcpSoc
 						else if (MsgType == GET_HIT)
 						{
 							packet >> vec.x >> vec.y;
-							hit = getHit(map, !i, vec.x, vec.y);
-							broadCast(GET_HIT, hit, i, clients);
+							if (vec == sf::Vector2i(-1, -1))
+								hit = false;
+							else hit = (map[!i][vec.x][vec.y] != '-');
+							broadCast(GET_HIT, hit, clients.at(i).first);
 							vec = { -1,-1 };
 							if (hit)
 								counting.at(i)++;
@@ -245,7 +236,7 @@ void GameServer::handlePackets(std::vector <std::pair<std::shared_ptr<sf::TcpSoc
 								won.at(!i) = 2;
 								first = false;
 							}
-							broadCast(WHOWON, won.at(i), i, clients);
+							broadCast(WHOWON, won.at(i), clients.at(i).first);
 						}
 						break;
 					case sf::Socket::Disconnected:
@@ -256,10 +247,10 @@ void GameServer::handlePackets(std::vector <std::pair<std::shared_ptr<sf::TcpSoc
 							won.at(!i) = 1;
 							first = false;
 						}
-						broadCast(SERVER_MSG, clients.at(i).second + " has been disconnected\n", !i, clients);
+						broadCast(SERVER_MSG, clients.at(i).second + " has been disconnected\n", clients.at(!i).first);
 						if (dis.at(0) && dis.at(1))
 						{
-							handleDisconnect(clients, won);
+							handleDisconnect(clients.at(0).second, clients.at(1).second, won);
 							clients.clear();
 						}
 						break;
@@ -276,42 +267,42 @@ void GameServer::handlePackets(std::vector <std::pair<std::shared_ptr<sf::TcpSoc
 *	this function in charge of send message
 */
 
-void GameServer::broadCast(PacketType MsgType, const std::string &msg, int index, std::vector <std::pair<std::shared_ptr<sf::TcpSocket>, std::string>>clients)
+void GameServer::broadCast(PacketType MsgType, const std::string &msg, std::shared_ptr<sf::TcpSocket> client)
 {
 	sf::Packet pack;
 	pack << MsgType << msg;
-	clients.at(index).first->send(pack);
+	client->send(pack);
 }
 
 /*
 *	this function in charge of send player score
 */
 
-void GameServer::broadCast(PacketType MsgType, const short won, int index, std::vector <std::pair<std::shared_ptr<sf::TcpSocket>, std::string>>clients)
+void GameServer::broadCast(PacketType MsgType, const short won, std::shared_ptr<sf::TcpSocket> client)
 {
 	sf::Packet pack;
 	pack << MsgType << won;
-	clients.at(index).first->send(pack);
+	client->send(pack);
 }
 
 /*
 *	this function in charge of send vector of coordinates
 */
 
-void GameServer::broadCast(PacketType MsgType, const sf::Vector2i& vec, int index, std::vector <std::pair<std::shared_ptr<sf::TcpSocket>, std::string>>clients)
+void GameServer::broadCast(PacketType MsgType, const sf::Vector2i& vec, std::shared_ptr<sf::TcpSocket> client)
 {
 	sf::Packet pack;
 	pack << MsgType << vec.x << vec.y;
-	clients.at(index).first->send(pack);
+	client->send(pack);
 }
 
 /*
 *	this function in charge of send if there are hit in the coordinate
 */
 
-void GameServer::broadCast(PacketType MsgType, const bool hit, int index, std::vector <std::pair<std::shared_ptr<sf::TcpSocket>, std::string>>clients)
+void GameServer::broadCast(PacketType MsgType, const bool hit, std::shared_ptr<sf::TcpSocket> client)
 {
 	sf::Packet pack;
 	pack << MsgType << hit;
-	clients.at(index).first->send(pack);
+	client->send(pack);
 }
